@@ -1,42 +1,53 @@
 package org.example;
 
-import java.sql.Connection;
-import java.sql.DriverManager;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
+import java.sql.*;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Scanner;
 
-public class GlobalWarmingApp {
-    private static final String DB_URL = "jdbc:mysql://localhost:3306/global_warming_app";
-    private static final String DB_USER = "root";
-    private static final String DB_PASSWORD = "Julia160703!";
+public class GlobalWarm {
+    private static Connection connection;
     private static Map<String, PopulationData> populations;
 
     public static void main(String[] args) {
-        initializePopulationsFromDatabase();
+        connectToDatabase();
+        initializePopulations();
         displayOptions();
         String selectedSpecies = getUserInput();
+        showAveragePopulation(selectedSpecies);
         showPopulation(selectedSpecies);
+        closeConnection();
     }
 
-    private static void initializePopulationsFromDatabase() {
+    private static void connectToDatabase() {
+        String url = "jdbc:mysql://localhost:3306/global_warming_app";
+        String username = "root";
+        String password = "Julia160703!";
+
+        try {
+            connection = DriverManager.getConnection(url, username, password);
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private static void initializePopulations() {
         populations = new HashMap<>();
 
-        try (Connection connection = DriverManager.getConnection(DB_URL, DB_USER, DB_PASSWORD)) {
-            String query = "SELECT name, population_2023, population_2033 FROM species";
-            PreparedStatement statement = connection.prepareStatement(query);
-            ResultSet resultSet = statement.executeQuery();
+        // Pobierz dane populacji z bazy danych
+        try {
+            Statement statement = connection.createStatement();
+            ResultSet resultSet = statement.executeQuery("SELECT name, population_2023, population_2033 FROM species");
 
             while (resultSet.next()) {
-                String speciesName = resultSet.getString("name");
+                String species = resultSet.getString("species");
                 int population2023 = resultSet.getInt("population_2023");
                 int population2033 = resultSet.getInt("population_2033");
-                PopulationData populationData = new PopulationData(population2023, population2033);
-                populations.put(speciesName, populationData);
+                populations.put(species, new PopulationData(population2023, population2033));
             }
+
+            resultSet.close();
+            statement.close();
         } catch (SQLException e) {
             e.printStackTrace();
         }
@@ -58,10 +69,37 @@ public class GlobalWarmingApp {
     private static void showPopulation(String species) {
         if (populations.containsKey(species)) {
             PopulationData populationData = populations.get(species);
-            System.out.println("Liczba pozostałych osobników [" + species + "] w 2023 roku: " + populationData.getPopulation2023());
-            System.out.println("Liczba pozostałych osobników [" + species + "] w 2033 roku: " + populationData.getPopulation2033());
+            System.out.println("Liczba pozostałych osobników [" + species + "] w 2023 roku: " + populationData.getPopulation2023() + "\n");
+            System.out.println("Liczba pozostałych osobników [" + species + "] w 2033 roku: " + populationData.getPopulation2033() + "\n");
+
+            double populationGrowthRate = ((double) (populationData.getPopulation2033() - populationData.getPopulation2023()) / populationData.getPopulation2023()) * 100;
+            double populationDecreaseRate = Math.abs(populationGrowthRate); // Obliczenie wartości bezwzględnej wzrostu
+            System.out.println("Procentowy spadek populacji [" + species + "] między rokiem 2023 a 2033: " + populationDecreaseRate + "%" + "\n");
         } else {
             System.out.println("Brak danych na temat wybranego gatunku.");
+        }
+    }
+
+    private static void showAveragePopulation(String species) {
+        if (populations.containsKey(species)) {
+            PopulationData populationData = populations.get(species);
+            int population2023 = populationData.getPopulation2023();
+            int population2033 = populationData.getPopulation2033();
+            double averagePopulation = (population2023 + population2033) / 2.0;
+            System.out.println("\nŚrednia populacja [" +
+                    species + "] w latach 2023 i 2033: " + averagePopulation + "\n");
+        } else {
+            System.out.println("Brak danych na temat wybranego gatunku.");
+        }
+    }
+
+    private static void closeConnection() {
+        try {
+            if (connection != null) {
+                connection.close();
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
         }
     }
 
